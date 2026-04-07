@@ -227,6 +227,54 @@
             height: 20px;
         }
 
+        .email-form {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .email-input {
+            flex-grow: 1;
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.875rem;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        .email-input:focus {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+        }
+
+        .secondary-btn {
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+            border: 1px solid var(--border-color);
+            padding: 0.75rem 1.25rem;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .secondary-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+        
+        .action-container {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+
         /* Typing indicator micro-animation */
         .typing {
             display: flex;
@@ -349,6 +397,9 @@
                             Download PDF Report
                         </a>
                     `);
+                    
+                    // Trigger email prompt shortly after completion
+                    setTimeout(() => askForEmail(), 1000);
                 } else {
                     const err = await response.json();
                     appendMessage('agent', `<p>❌ Sorry, an error occurred during generation:</p><p style="color: #ef4444; font-family: monospace; font-size: 0.9em;">${err.detail || 'Unknown error'}</p>`);
@@ -358,6 +409,70 @@
                 appendMessage('agent', `<p>❌ Request failed. Make sure the server is accessible.</p><p style="color: #ef4444; font-family: monospace; font-size: 0.9em;">${error.message}</p>`);
             } finally {
                 generateBtn.disabled = false;
+            }
+        }
+        
+        // Email interactive flow
+        function askForEmail() {
+            appendMessage('agent', `
+                <p>Would you like me to email this report to someone?</p>
+                <div class="action-container" id="emailPromptActions">
+                    <button class="secondary-btn" onclick="showEmailInput(this)">Yes, email it</button>
+                    <button class="secondary-btn" onclick="this.parentElement.innerHTML = '<em>No thanks.</em>'">No thanks</button>
+                </div>
+            `);
+        }
+
+        function showEmailInput(btn) {
+            const container = btn.parentElement;
+            container.innerHTML = `
+                <div class="email-form" style="width: 100%">
+                    <input type="email" id="targetEmail" class="email-input" placeholder="name@example.com" required>
+                    <button class="secondary-btn" onclick="submitEmail(this)">Send</button>
+                </div>
+            `;
+            setTimeout(() => document.getElementById('targetEmail').focus(), 100);
+        }
+
+        async function submitEmail(btn) {
+            const input = document.getElementById('targetEmail');
+            const email = input.value.trim();
+            if (!email || !email.includes('@')) {
+                alert("Please enter a valid email address.");
+                return;
+            }
+            
+            // Lock fields
+            input.disabled = true;
+            btn.disabled = true;
+
+            appendMessage('user', `<p>Yes, send it to: ${email}</p>`);
+
+            const loaderMsg = appendMessage('agent', `
+                <p>Sending email...</p>
+                <div class="typing">
+                    <span></span><span></span><span></span>
+                </div>
+            `);
+
+            try {
+                const response = await fetch('/session/send_email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: email })
+                });
+
+                loaderMsg.remove();
+                const data = await response.json();
+                
+                if (response.ok) {
+                    appendMessage('agent', `<p>✅ <strong>Sent!</strong></p><p style="font-size: 0.9em; opacity: 0.9;">${data.message}</p>`);
+                } else {
+                    appendMessage('agent', `<p>❌ Failed to send email:</p><p style="color: #ef4444; font-size: 0.9em;">${data.detail || 'Unknown error'}</p>`);
+                }
+            } catch (error) {
+                loaderMsg.remove();
+                appendMessage('agent', `<p>❌ Request error:</p><p style="color: #ef4444; font-size: 0.9em;">${error.message}</p>`);
             }
         }
     </script>

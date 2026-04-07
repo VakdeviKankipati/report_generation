@@ -1,7 +1,10 @@
 """FastAPI app for the Daily Report OpenEnv server."""
 
 import inspect
+import os
+import smtplib
 import threading
+from email.message import EmailMessage
 from typing import Any, Dict, Optional
 
 from fastapi import HTTPException, Response
@@ -59,6 +62,10 @@ class SessionResetBody(BaseModel):
     task: str = "daily_full"
     seed: Optional[int] = None
     episode_id: Optional[str] = None
+
+
+class EmailRequest(BaseModel):
+    email: str
 
 
 @app.get("/")
@@ -150,6 +157,50 @@ def session_run_static_demo() -> Dict[str, Any]:
         "message": "Static gold report generated. Download: GET /session/report.pdf",
         "result": serialize_observation(obs),
     }
+
+
+@app.post("/session/send_email", tags=["Session (stateful HTTP)"])
+def session_send_email(body: EmailRequest) -> Dict[str, Any]:
+    """Email the generated PDF report via Gmail SMTP (or mock it)."""
+    global _session_env
+    with _session_lock:
+        if _session_env is None or not _session_env.has_pdf:
+            raise HTTPException(
+                status_code=400, detail="No PDF has been generated yet. Please generate the report first."
+            )
+        pdf_bytes = _session_env.pdf_bytes
+        assert pdf_bytes is not None
+
+    smtp_user = os.environ.get("SMTP_EMAIL")
+    smtp_pass = os.environ.get("SMTP_PASSWORD")
+
+    if not smtp_user or not smtp_pass:
+        print(f"[MOCK EMAIL] Would send report to {body.email} (Configure SMTP_EMAIL and SMTP_PASSWORD to send real emails)")
+        return {"message": f"Simulated email sent to {body.email} (Credentials missing)"}
+
+    msg = EmailMessage()
+    msg["Subject"] = "Daily Post-Merge Operations Report"
+    msg["From"] = smtp_user
+    msg["To"] = body.email
+    msg.set_content("Hello,\\n\\nPlease find the attached Daily MRG Report generated automatically by the Reporting Service.\\n\\nThanks.")
+
+    msg.add_attachment(
+        pdf_bytes,
+        maintype="application",
+        subtype="pdf",
+        filename="daily_mrg_report.pdf",
+    )
+
+    try:
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_pass)
+            server.send_message(msg)
+    except Exception as exc:
+        print(f"[EMAIL ERROR] {exc}")
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {exc}")
+
+    return {"message": f"Successfully sent email to {body.email}"}
 
 
 def main() -> None:
