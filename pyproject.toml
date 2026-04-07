@@ -24,9 +24,9 @@ dev = [
 ]
 
 [project.scripts]
-server = "daily_report_env.server.app:main"
+server = "server.app:main"
 
 [tool.setuptools]
 include-package-data = true
-packages = ["daily_report_env", "daily_report_env.server"]
-package-dir = { "daily_report_env" = ".", "daily_report_env.server" = "server" }
+packages = ["server"]
+py-modules = ["models", "client"]
