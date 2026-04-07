@@ -1,0 +1,2 @@
+[console_scripts]
+server = daily_report_env.server.app:main
