@@ -159,10 +159,14 @@ def _task_grade(
     pdf_flag: bool,
 ) -> float:
     if task == "daily_header":
-        return _grade_header(header)
-    if task == "daily_summary":
-        return _grade_summary(header, metrics)
-    return _grade_full(header, metrics, rows, pdf_bytes, pdf_flag)
+        raw = _grade_header(header)
+    elif task == "daily_summary":
+        raw = _grade_summary(header, metrics)
+    else:
+        raw = _grade_full(header, metrics, rows, pdf_bytes, pdf_flag)
+    
+    # Clamp score to strictly (0, 1) to pass Phase 2 fail-fast requirement
+    return max(0.01, min(0.99, raw))
 
 
 def _build_pdf_bytes(
