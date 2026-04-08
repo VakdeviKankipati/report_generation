@@ -32,7 +32,7 @@ def test_grade_header_perfect():
         "report_date": "2026-04-04",
         "author": "Automated Reporting Service",
     }
-    assert _grade_header(h) == pytest.approx(1.0)
+    assert _grade_header(h) == pytest.approx(0.99)
 
 
 def test_grade_summary_partial():
@@ -50,7 +50,7 @@ def test_full_episode_easy():
     env = DailyReportEnvironment()
     obs = env.reset(task="daily_header")
     assert obs.task == "daily_header"
-    assert obs.graded_score == 0.0
+    assert obs.graded_score == pytest.approx(0.01)
     obs = env.step(
         DailyReportAction(command="set_header_field", key="title", value="Daily Post-Merge Operations Report")
     )
@@ -61,7 +61,7 @@ def test_full_episode_easy():
     )
     obs = env.step(DailyReportAction(command="submit_report"))
     assert obs.done
-    assert obs.graded_score == pytest.approx(1.0)
+    assert obs.graded_score == pytest.approx(0.99)
 
 
 def test_hard_requires_pdf():
@@ -80,7 +80,7 @@ def test_hard_requires_pdf():
         env.step(DailyReportAction(command="add_kpi_row", row_cells=row))
     obs = env.step(DailyReportAction(command="submit_report"))
     assert obs.done
-    assert obs.graded_score < 0.99  # PDF chunk missing
+    assert 0.0 < obs.graded_score < 0.99  # PDF chunk missing
 
 
 def test_run_gold_full_episode_produces_pdf():
@@ -104,4 +104,4 @@ def test_grade_full_integration():
 
     pdf = _build_pdf_bytes(header, metrics, rows)
     g = _grade_full(header, metrics, rows, pdf, True)
-    assert g >= 0.85
+    assert 0.85 <= g < 1.0

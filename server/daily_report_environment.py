@@ -70,11 +70,16 @@ MAX_STEPS_BY_TASK: Dict[TaskName, int] = {
 }
 
 
+def _strict_open_unit(x: float) -> float:
+    """Clamp to strict open interval required by evaluator."""
+    return max(0.01, min(0.99, float(x)))
+
+
 def _grade_header(header: Dict[str, str]) -> float:
     if not EXPECTED_HEADER:
-        return 1.0
+        return 0.99
     ok = sum(1 for k, v in EXPECTED_HEADER.items() if header.get(k) == v)
-    return ok / len(EXPECTED_HEADER)
+    return _strict_open_unit(ok / len(EXPECTED_HEADER))
 
 
 def _grade_summary(header: Dict[str, str], metrics: Dict[str, str]) -> float:
@@ -82,8 +87,8 @@ def _grade_summary(header: Dict[str, str], metrics: Dict[str, str]) -> float:
     if not EXPECTED_METRICS:
         return h
     m_ok = sum(1 for k, v in EXPECTED_METRICS.items() if metrics.get(k) == v)
-    m = m_ok / len(EXPECTED_METRICS)
-    return 0.35 * h + 0.65 * m
+    m = _strict_open_unit(m_ok / len(EXPECTED_METRICS))
+    return _strict_open_unit(0.35 * h + 0.65 * m)
 
 
 def _rows_match(expected: List[List[str]], actual: List[List[str]]) -> bool:
@@ -100,12 +105,12 @@ def _pdf_passes(pdf_bytes: bytes) -> Tuple[float, List[str]]:
     """Return (score_contribution 0-1, reasons) for hard task PDF checks."""
     reasons: List[str] = []
     if not pdf_bytes:
-        return 0.0, ["empty_pdf"]
+        return 0.01, ["empty_pdf"]
 
     try:
         from pypdf import PdfReader
     except ImportError:
-        return 0.0, ["pypdf_missing"]
+        return 0.01, ["pypdf_missing"]
 
     try:
         reader = PdfReader(io.BytesIO(pdf_bytes))
@@ -113,7 +118,7 @@ def _pdf_passes(pdf_bytes: bytes) -> Tuple[float, List[str]]:
         for page in reader.pages:
             text += page.extract_text() or ""
     except Exception as exc:
-        return 0.0, [f"pdf_read_error:{exc}"]
+        return 0.01, [f"pdf_read_error:{exc}"]
 
     text_lower = text.lower()
     needles = [
@@ -125,7 +130,7 @@ def _pdf_passes(pdf_bytes: bytes) -> Tuple[float, List[str]]:
         "42",
     ]
     hits = sum(1 for n in needles if n in text_lower or n in text)
-    frac = hits / len(needles)
+    frac = _strict_open_unit(hits / len(needles))
     if frac < 1.0:
         reasons.append(f"text_hits={hits}/{len(needles)}")
     return frac, reasons
@@ -140,14 +145,14 @@ def _grade_full(
 ) -> float:
     base = _grade_summary(header, metrics)
     exp_rows = STATIC_DATA["kpi_rows_expected"]
-    row_part = 1.0 if _rows_match(exp_rows, rows) else 0.0
-    pdf_part = 0.0
+    row_part = 0.99 if _rows_match(exp_rows, rows) else 0.01
+    pdf_part = 0.01
     if pdf_flag and pdf_bytes:
         pdf_part, _ = _pdf_passes(pdf_bytes)
     elif pdf_flag and not pdf_bytes:
-        pdf_part = 0.0
+        pdf_part = 0.01
     # Weighted blend: summary 0.45, table 0.25, pdf integrity 0.30
-    return 0.45 * base + 0.25 * row_part + 0.30 * pdf_part
+    return _strict_open_unit(0.45 * base + 0.25 * row_part + 0.30 * pdf_part)
 
 
 def _task_grade(
@@ -166,7 +171,7 @@ def _task_grade(
         raw = _grade_full(header, metrics, rows, pdf_bytes, pdf_flag)
     
     # Clamp score to strictly (0, 1) to pass Phase 2 fail-fast requirement
-    return max(0.01, min(0.99, raw))
+    return _strict_open_unit(raw)
 
 
 def _build_pdf_bytes(
