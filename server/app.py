@@ -18,7 +18,9 @@ try:
     from openenv.core.env_server.types import ResetResponse, StepRequest, StepResponse
 
     from ..models import DailyReportAction, DailyReportObservation
+    from .database import ReportTrackingDB
     from .daily_report_environment import DailyReportEnvironment, run_gold_full_episode
+    from .scheduler_agents import run_manual_schedule
 except ImportError:
     from models import DailyReportAction, DailyReportObservation  # type: ignore
 
@@ -26,7 +28,9 @@ except ImportError:
     from openenv.core.env_server.serialization import deserialize_action, serialize_observation  # type: ignore
     from openenv.core.env_server.types import ResetResponse, StepRequest, StepResponse  # type: ignore
 
+    from server.database import ReportTrackingDB  # type: ignore
     from server.daily_report_environment import DailyReportEnvironment, run_gold_full_episode  # type: ignore
+    from server.scheduler_agents import run_manual_schedule  # type: ignore
 
 
 def _create_app():
@@ -66,6 +70,10 @@ class SessionResetBody(BaseModel):
 
 class EmailRequest(BaseModel):
     email: str
+
+
+class ManualScheduleRequest(BaseModel):
+    slot: str = "both"  # 10am | 11am | both
 
 
 @app.get("/")
@@ -201,6 +209,37 @@ def session_send_email(body: EmailRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"Failed to send email: {exc}")
 
     return {"message": f"Successfully sent email to {body.email}"}
+
+
+@app.post("/session/run_manual_schedule", tags=["Scheduling"])
+def session_run_manual_schedule(body: ManualScheduleRequest = ManualScheduleRequest()) -> Dict[str, Any]:
+    """Manual scheduler trigger for 10am/11am report generation and sending."""
+    db = ReportTrackingDB()
+    db.seed_static_data()
+    try:
+        result = run_manual_schedule(db, body.slot)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {
+        "message": "Manual schedule executed",
+        "result": result,
+    }
+
+
+@app.get("/session/live_tracks", tags=["Scheduling"])
+def session_live_tracks() -> Dict[str, Any]:
+    """Return live tracking rows for UI table."""
+    db = ReportTrackingDB()
+    rows = db.list_live_tracks()
+    return {"count": len(rows), "rows": rows}
+
+
+@app.post("/session/live_tracks/reset", tags=["Scheduling"])
+def session_live_tracks_reset() -> Dict[str, Any]:
+    """Clear live tracking table for fresh training/evaluation episodes."""
+    db = ReportTrackingDB()
+    deleted = db.clear_live_tracks()
+    return {"message": "Live tracking reset", "deleted_rows": deleted}
 
 
 def main() -> None:
