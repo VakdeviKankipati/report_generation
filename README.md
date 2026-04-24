@@ -20,17 +20,16 @@ This is **not** a game: it models scheduled reporting after an overnight merge w
 
 | Piece | Location |
 |--------|-----------|
-| `openenv.yaml` | `daily_report_env/openenv.yaml` |
-| Typed `Action` / `Observation` / `ReportReward` / `State` | `daily_report_env/models.py` |
-| `reset()` / `step()` / `state` | `daily_report_env/server/daily_report_environment.py` |
-| FastAPI app | `daily_report_env/server/app.py` |
-| Client (`EnvClient`) | `daily_report_env/client.py` |
+| `openenv.yaml` | `openenv.yaml` |
+| Typed `Action` / `Observation` / `ReportReward` / `State` | `models.py` |
+| `reset()` / `step()` / `state` | `server/daily_report_environment.py` |
+| FastAPI app | `server/app.py` |
+| Client (`EnvClient`) | `client.py` |
 | Baseline inference | `inference.py` (repository root) |
 
 Validate locally:
 
 ```bash
-cd daily_report_env
 uv sync
 uv run openenv validate --verbose
 uv run openenv validate --url http://127.0.0.1:8000   # with server running
@@ -76,7 +75,6 @@ All graders are **deterministic** and return a score in **[0.0, 1.0]**.
 **Requirements:** Python **3.10+**, [uv](https://github.com/astral-sh/uv) (recommended), Docker (for containers / HF).
 
 ```bash
-cd daily_report_env
 uv sync
 uv run uvicorn server.app:app --host 0.0.0.0 --port 8000
 ```
@@ -177,9 +175,23 @@ With `DAILY_REPORT_SCRIPTED=1` and a matching server, episodes end with **`succe
 ## Tests
 
 ```bash
-cd daily_report_env
 uv run pytest tests/ -q
 ```
+
+## Minimal Colab training script (HF TRL + Unsloth)
+
+Use `hackathon/train_colab.ipynb` for a minimal, re-runnable training flow connected to this environment.
+
+- Installs `trl` and `unsloth`.
+- Runs baseline reward collection (`random` vs `both_only` scheduler policies).
+- Runs a minimal GRPO training loop via `GRPOTrainer`.
+- Saves evidence artifacts for judging:
+  - `hackathon/reward_curve.png`
+  - `hackathon/baseline_policy_rewards.csv`
+  - `hackathon/grpo_train_logs.csv`
+  - `hackathon/grpo_loss_curve.png`
+
+Run the notebook with the environment server reachable at `BASE_URL` (local or Space URL), then attach the generated artifacts in your submission/demo.
 
 ## Hackathon Submission & Demo
 
