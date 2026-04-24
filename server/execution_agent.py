@@ -31,85 +31,48 @@ def _send_agent_email(
         print(f"[EMAIL][MOCK] recipient={recipient_email} subject={subject}")
         return True, "mock_sent"
 
-    resend_api_key = os.environ.get("RESEND_API_KEY")
-    resend_from_email = os.environ.get("RESEND_FROM_EMAIL")
+    sender_email = os.environ.get("SENDER_EMAIL") or os.environ.get("SMTP_EMAIL")
+    api_key = os.environ.get("BREVO_API_KEY") or os.environ.get("SMTP_PASSWORD")
 
-    smtp_user = os.environ.get("SMTP_EMAIL")
-    smtp_pass = os.environ.get("SMTP_PASSWORD")
-    smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
-    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
-    smtp_timeout = float(os.environ.get("SMTP_TIMEOUT_SECONDS", "15"))
-
-    msg = EmailMessage()
-    msg["Subject"] = subject
-    msg["From"] = smtp_user
-    msg["To"] = recipient_email
-    msg.set_content(body)
-
-    if attachment_name and attachment_bytes:
-        subtype = "pdf" if attachment_name.lower().endswith(".pdf") else "octet-stream"
-        msg.add_attachment(
-            attachment_bytes,
-            maintype="application",
-            subtype=subtype,
-            filename=attachment_name,
-        )
-
-    smtp_err = "smtp_not_configured"
-    if smtp_user and smtp_pass:
-        try:
-            print(
-                f"[EMAIL][SMTP] attempting recipient={recipient_email} host={smtp_host}:{smtp_port} timeout={smtp_timeout}s"
-            )
-            with smtplib.SMTP(smtp_host, smtp_port, timeout=smtp_timeout) as server:
-                server.starttls()
-                server.login(smtp_user, smtp_pass)
-                server.send_message(msg)
-            print(f"[EMAIL][SMTP] sent recipient={recipient_email}")
-            return True, "sent"
-        except Exception as exc:
-            smtp_err = f"smtp_error:{exc}"
-            print(f"[EMAIL][SMTP][ERROR] recipient={recipient_email} err={smtp_err}")
-    else:
-        print(f"[EMAIL][SKIP] smtp_not_configured recipient={recipient_email}")
-
-    # Optional HTTPS fallback for Spaces where SMTP can be flaky/blocked.
-    if not resend_api_key or not resend_from_email:
-        return False, smtp_err
+    if not sender_email or not api_key:
+        print(f"[EMAIL][SKIP] smtp_not_configured recipient={recipient_email} (Configure SENDER_EMAIL and BREVO_API_KEY)")
+        return False, "api_keys_not_configured"
 
     try:
+        url = "https://api.brevo.com/v3/smtp/email"
         payload: Dict[str, object] = {
-            "from": resend_from_email,
-            "to": [recipient_email],
+            "sender": {"name": "Reporting Service Agent", "email": sender_email},
+            "to": [{"email": recipient_email}],
             "subject": subject,
-            "text": body,
+            "textContent": body,
         }
+        
         if attachment_name and attachment_bytes:
             payload["attachments"] = [
                 {
-                    "filename": attachment_name,
-                    "content": base64.b64encode(attachment_bytes).decode("ascii"),
+                    "name": attachment_name,
+                    "content": base64.b64encode(attachment_bytes).decode("ascii")
                 }
             ]
 
-        print(f"[EMAIL][RESEND] attempting recipient={recipient_email}")
-        r = requests.post(
-            "https://api.resend.com/emails",
-            headers={
-                "Authorization": f"Bearer {resend_api_key}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            timeout=15,
-        )
-        if r.ok:
-            print(f"[EMAIL][RESEND] sent recipient={recipient_email}")
-            return True, "sent_via_resend"
-        print(f"[EMAIL][RESEND][ERROR] status={r.status_code} body={r.text[:200]}")
-        return False, f"resend_error:{r.status_code}"
+        print(f"[EMAIL][BREVO] attempting recipient={recipient_email}")
+        
+        headers = {
+            "accept": "application/json",
+            "api-key": api_key,
+            "content-type": "application/json"
+        }
+        
+        response = requests.post(url, json=payload, headers=headers, timeout=15)
+        response.raise_for_status()
+        print(f"[EMAIL][BREVO] sent recipient={recipient_email}")
+        return True, "sent_via_brevo"
     except Exception as exc:
-        print(f"[EMAIL][RESEND][ERROR] recipient={recipient_email} err={exc}")
-        return False, f"resend_exception:{exc}"
+        err_msg = str(exc)
+        if hasattr(exc, 'response') and exc.response is not None:
+            err_msg += f" body={exc.response.text}"
+        print(f"[EMAIL][BREVO][ERROR] recipient={recipient_email} err={err_msg}")
+        return False, f"brevo_error:{exc}"
 
 
 def execute_report_job(db: ReportTrackingDB, report_id: str) -> Dict[str, object]:
