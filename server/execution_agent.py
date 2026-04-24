@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import base64
 import os
 import smtplib
 from email.message import EmailMessage
 from typing import Dict
+
+import requests
 
 from .database import ReportTrackingDB
 from .report_builder import build_10am_account_statement, build_11am_finance_summary
@@ -25,11 +28,13 @@ def _send_agent_email(
     - Otherwise requires SMTP_EMAIL and SMTP_PASSWORD to send real emails.
     """
     if os.environ.get("AGENT_EMAIL_MOCK", "0") == "1":
+        print(f"[EMAIL][MOCK] recipient={recipient_email} subject={subject}")
         return True, "mock_sent"
 
     smtp_user = os.environ.get("SMTP_EMAIL")
     smtp_pass = os.environ.get("SMTP_PASSWORD")
     if not smtp_user or not smtp_pass:
+        print(f"[EMAIL][SKIP] smtp_not_configured recipient={recipient_email}")
         return False, "smtp_not_configured"
     smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
     smtp_port = int(os.environ.get("SMTP_PORT", "587"))
@@ -51,13 +56,58 @@ def _send_agent_email(
         )
 
     try:
+        print(
+            f"[EMAIL][SMTP] attempting recipient={recipient_email} host={smtp_host}:{smtp_port} timeout={smtp_timeout}s"
+        )
         with smtplib.SMTP(smtp_host, smtp_port, timeout=smtp_timeout) as server:
             server.starttls()
             server.login(smtp_user, smtp_pass)
             server.send_message(msg)
+        print(f"[EMAIL][SMTP] sent recipient={recipient_email}")
         return True, "sent"
     except Exception as exc:
-        return False, f"smtp_error:{exc}"
+        smtp_err = f"smtp_error:{exc}"
+        print(f"[EMAIL][SMTP][ERROR] recipient={recipient_email} err={smtp_err}")
+
+    # Optional HTTPS fallback for Spaces where SMTP can be flaky/blocked.
+    resend_api_key = os.environ.get("RESEND_API_KEY")
+    resend_from_email = os.environ.get("RESEND_FROM_EMAIL")
+    if not resend_api_key or not resend_from_email:
+        return False, smtp_err
+
+    try:
+        payload: Dict[str, object] = {
+            "from": resend_from_email,
+            "to": [recipient_email],
+            "subject": subject,
+            "text": body,
+        }
+        if attachment_name and attachment_bytes:
+            payload["attachments"] = [
+                {
+                    "filename": attachment_name,
+                    "content": base64.b64encode(attachment_bytes).decode("ascii"),
+                }
+            ]
+
+        print(f"[EMAIL][RESEND] attempting recipient={recipient_email}")
+        r = requests.post(
+            "https://api.resend.com/emails",
+            headers={
+                "Authorization": f"Bearer {resend_api_key}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=15,
+        )
+        if r.ok:
+            print(f"[EMAIL][RESEND] sent recipient={recipient_email}")
+            return True, "sent_via_resend"
+        print(f"[EMAIL][RESEND][ERROR] status={r.status_code} body={r.text[:200]}")
+        return False, f"resend_error:{r.status_code}"
+    except Exception as exc:
+        print(f"[EMAIL][RESEND][ERROR] recipient={recipient_email} err={exc}")
+        return False, f"resend_exception:{exc}"
 
 
 def execute_report_job(db: ReportTrackingDB, report_id: str) -> Dict[str, object]:

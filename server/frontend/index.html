@@ -437,7 +437,7 @@
 
             try {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 30000);
+                const timeoutId = setTimeout(() => controller.abort(), 90000);
                 const response = await fetch('/session/run_manual_schedule', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -464,7 +464,7 @@
             } catch (error) {
                 loaderMsg.remove();
                 const msg = error.name === 'AbortError'
-                    ? 'Request timed out after 30s. Check SMTP settings/network and try again.'
+                    ? 'Request timed out after 90s. Check SMTP settings/network and try again.'
                     : error.message;
                 appendMessage('agent', `<p>❌ Request failed. Make sure the server is accessible.</p><p style="color: #ef4444; font-family: monospace; font-size: 0.9em;">${msg}</p>`);
             } finally {
