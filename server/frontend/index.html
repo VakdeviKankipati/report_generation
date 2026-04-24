@@ -275,6 +275,14 @@
             flex-wrap: wrap;
         }
 
+        .query-controls {
+            margin-top: 1rem;
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
         .table-wrap {
             margin-top: 1rem;
             width: 100%;
@@ -341,7 +349,7 @@
         <header class="chat-header">
             <div class="avatar-container">AI</div>
             <div class="header-text">
-                <h1>Report Agent</h1>
+                <h1>Multi-Agent Assistant</h1>
                 <p><span class="status-dot"></span> Online and ready</p>
             </div>
         </header>
@@ -349,7 +357,7 @@
         <div class="chat-messages" id="chatMessages">
             <div class="message agent">
                 <p>Hello! I am your Automated Reporting Service.</p>
-                <p>Click schedule to run the report agent. The live tracking table will show how each customer report is generated and emailed.</p>
+                <p>Use Report Agent for scheduled generation, and Query Agent to ask natural questions like "why failed", "loan 1 details", or "status summary".</p>
             </div>
         </div>
 
@@ -367,11 +375,24 @@
             <button class="secondary-btn" style="margin-left: 0.5rem;" onclick="runSchedule('10am')">Run 10am</button>
             <button class="secondary-btn" style="margin-left: 0.5rem;" onclick="runSchedule('11am')">Run 11am</button>
         </div>
+        <div class="chat-input-area" style="padding-top: 0.75rem;">
+            <div class="query-controls">
+                <input id="loanInput" class="email-input" type="text" placeholder="Ask Query Agent anything..." />
+                <button class="secondary-btn" id="queryBtn" onclick="runQueryAgent()">Run Query Agent</button>
+            </div>
+        </div>
     </div>
 
     <script>
         const chatMessages = document.getElementById('chatMessages');
         const generateBtn = document.getElementById('generateBtn');
+        const queryBtn = document.getElementById('queryBtn');
+        const loanInput = document.getElementById('loanInput');
+        loanInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                runQueryAgent();
+            }
+        });
 
         function appendMessage(sender, contentRawHtml) {
             const msgDiv = document.createElement('div');
@@ -462,6 +483,127 @@
                 appendMessage('agent', `<p>❌ Request failed. Make sure the server is accessible.</p><p style="color: #ef4444; font-family: monospace; font-size: 0.9em;">${error.message}</p>`);
             } finally {
                 generateBtn.disabled = false;
+            }
+        }
+
+        function renderQueryResult(data) {
+            if (data && data.intent && data.answer) {
+                if (data.intent === 'loan_lookup') {
+                    return renderQueryResult(data.answer);
+                }
+                if (data.intent === 'run_summary') {
+                    return `
+                        <p>✅ <strong>Query Agent: Run Summary</strong></p>
+                        <p>Total: <code>${data.answer.total || 0}</code></p>
+                        <p>Success: <code>${data.answer.success || 0}</code> | Failed: <code>${data.answer.failed || 0}</code></p>
+                        <p>In progress: <code>${data.answer.in_progress || 0}</code> | Started: <code>${data.answer.started || 0}</code></p>
+                    `;
+                }
+                if (data.intent === 'loan_list') {
+                    const loans = (data.answer.loan_numbers || []).map((x) => `<code>${x}</code>`).join(', ');
+                    return `
+                        <p>✅ <strong>Query Agent: Loan Number List</strong></p>
+                        <p>Total loans: <code>${data.answer.count || 0}</code></p>
+                        <p>${loans || 'No loans found.'}</p>
+                    `;
+                }
+                if (data.intent === 'loan_details_list') {
+                    const rows = (data.answer.loans || []).map((l) =>
+                        `<li><code>${l.loan_number}</code> | ${l.account_name} | ${l.customer_name} | <code>${l.customer_email}</code> | ${l.region} | revenue=<code>${l.revenue_musd}</code> incidents=<code>${l.incidents}</code> uptime=<code>${l.uptime_pct}</code> | permanent_fail=<code>${l.should_fail_permanently}</code></li>`
+                    ).join('');
+                    return `
+                        <p>✅ <strong>Query Agent: All Loan Details</strong></p>
+                        <p>Total loans: <code>${data.answer.count || 0}</code></p>
+                        ${rows ? `<ul>${rows}</ul>` : '<p>No loan details found.</p>'}
+                    `;
+                }
+                if (data.intent === 'customer_list') {
+                    const rows = (data.answer.customers || []).map((c) =>
+                        `<li><code>${c.customer_code}</code> - ${c.customer_name} - <code>${c.customer_email}</code> - loan <code>${c.loan_number}</code></li>`
+                    ).join('');
+                    return `
+                        <p>✅ <strong>Query Agent: Customer List</strong></p>
+                        <p>Total customers: <code>${data.answer.count || 0}</code></p>
+                        ${rows ? `<ul>${rows}</ul>` : '<p>No customers found.</p>'}
+                    `;
+                }
+                if (data.intent === 'failure_summary') {
+                    const examples = (data.answer.examples || []).map((e) =>
+                        `<li><code>${e.report_id}</code> | <code>${e.lan_code}</code> | error=<code>${e.error || ''}</code> | email=<code>${e.email_status || ''}</code></li>`
+                    ).join('');
+                    return `
+                        <p>⚠️ <strong>Query Agent: Failure Summary</strong></p>
+                        <p>Failed count: <code>${data.answer.failed_count || 0}</code></p>
+                        ${examples ? `<ul>${examples}</ul>` : '<p>No failed examples available yet.</p>'}
+                    `;
+                }
+                if (data.intent === 'help') {
+                    return `
+                        <p>ℹ️ <strong>Query Agent Help</strong></p>
+                        <p>${data.answer.message}</p>
+                        <p>Examples: <code>give me all the loan details</code>, <code>give me all the loan numbers</code>, <code>list customers with emails</code>, <code>why failed</code>, <code>loan 2 details</code>.</p>
+                    `;
+                }
+            }
+
+            if (!data || data.found !== true) {
+                return `
+                    <p>❌ <strong>Query Agent Result: Not Found</strong></p>
+                    <p>Loan Number: <code>${data?.loan_number || ''}</code></p>
+                    <p>Reason: <code>${data?.reason || 'unknown'}</code></p>
+                    <p>Escalation Email: <code>${data?.notify_email || ''}</code></p>
+                `;
+            }
+            return `
+                <p>✅ <strong>Query Agent Result: Found</strong></p>
+                <p>Loan Number: <code>${data.loan_number}</code></p>
+                <p>Customer: <code>${data.customer_code}</code> (${data.customer_name})</p>
+                <p>Email: <code>${data.customer_email}</code></p>
+                <p>Account: <code>${data.account_name}</code> | Region: <code>${data.region}</code></p>
+                <p>Metrics: revenue=<code>${data.metric_revenue_musd}</code>, incidents=<code>${data.metric_incidents}</code>, uptime=<code>${data.metric_uptime_pct}</code></p>
+            `;
+        }
+
+        async function runQueryAgent() {
+            const queryText = loanInput.value.trim();
+            if (!queryText) {
+                appendMessage('agent', '<p>⚠️ Ask anything, for example: <code>loan 1 details</code>, <code>why failed</code>, or <code>status summary</code>.</p>');
+                return;
+            }
+
+            queryBtn.disabled = true;
+            appendMessage('user', `<p>Query: <strong>${queryText}</strong></p>`);
+            loanInput.value = '';
+
+            const loaderMsg = appendMessage('agent', `
+                <p>Running query agent lookup...</p>
+                <div class="typing">
+                    <span></span><span></span><span></span>
+                </div>
+            `);
+
+            try {
+                const response = await fetch('/session/agent/query', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query_text: queryText })
+                });
+
+                loaderMsg.remove();
+
+                if (response.ok) {
+                    const data = await response.json();
+                    appendMessage('agent', renderQueryResult(data));
+                } else {
+                    const err = await response.json();
+                    appendMessage('agent', `<p>❌ Query failed:</p><p style="color: #ef4444; font-family: monospace; font-size: 0.9em;">${err.detail || 'Unknown error'}</p>`);
+                }
+            } catch (error) {
+                loaderMsg.remove();
+                appendMessage('agent', `<p>❌ Query request failed.</p><p style="color: #ef4444; font-family: monospace; font-size: 0.9em;">${error.message}</p>`);
+            } finally {
+                queryBtn.disabled = false;
+                loanInput.focus();
             }
         }
     </script>

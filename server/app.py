@@ -20,6 +20,8 @@ try:
     from ..models import DailyReportAction, DailyReportObservation
     from .database import ReportTrackingDB
     from .daily_report_environment import DailyReportEnvironment, run_gold_full_episode
+    from .query_agent import answer_query, get_loan_details
+    from .report_agent import run_daily_generation
     from .scheduler_agents import run_manual_schedule
 except ImportError:
     from models import DailyReportAction, DailyReportObservation  # type: ignore
@@ -30,6 +32,8 @@ except ImportError:
 
     from server.database import ReportTrackingDB  # type: ignore
     from server.daily_report_environment import DailyReportEnvironment, run_gold_full_episode  # type: ignore
+    from server.query_agent import answer_query, get_loan_details  # type: ignore
+    from server.report_agent import run_daily_generation  # type: ignore
     from server.scheduler_agents import run_manual_schedule  # type: ignore
 
 
@@ -74,6 +78,14 @@ class EmailRequest(BaseModel):
 
 class ManualScheduleRequest(BaseModel):
     slot: str = "both"  # 10am | 11am | both
+
+
+class LoanLookupRequest(BaseModel):
+    loan_number: str
+
+
+class AgentQueryRequest(BaseModel):
+    query_text: str
 
 
 @app.get("/")
@@ -232,6 +244,30 @@ def session_live_tracks() -> Dict[str, Any]:
     db = ReportTrackingDB()
     rows = db.list_live_tracks()
     return {"count": len(rows), "rows": rows}
+
+
+@app.post("/session/agent/lookup_loan", tags=["Agent Tools"])
+def session_agent_lookup_loan(body: LoanLookupRequest) -> Dict[str, Any]:
+    """Agent tool: lookup loan/LAN and return structured details."""
+    db = ReportTrackingDB()
+    db.seed_static_data()
+    return get_loan_details(db, body.loan_number)
+
+
+@app.post("/session/agent/query", tags=["Agent Tools"])
+def session_agent_query(body: AgentQueryRequest) -> Dict[str, Any]:
+    """Agent tool: answer free-text questions about loans/report runs."""
+    db = ReportTrackingDB()
+    db.seed_static_data()
+    return answer_query(db, body.query_text)
+
+
+@app.post("/session/agent/run_daily", tags=["Agent Tools"])
+def session_agent_run_daily() -> Dict[str, Any]:
+    """Agent tool: run daily autonomous generation without manual input."""
+    db = ReportTrackingDB()
+    db.seed_static_data()
+    return run_daily_generation(db)
 
 
 @app.post("/session/live_tracks/reset", tags=["Scheduling"])
