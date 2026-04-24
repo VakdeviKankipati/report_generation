@@ -31,11 +31,11 @@ def _send_agent_email(
         print(f"[EMAIL][MOCK] recipient={recipient_email} subject={subject}")
         return True, "mock_sent"
 
+    resend_api_key = os.environ.get("RESEND_API_KEY")
+    resend_from_email = os.environ.get("RESEND_FROM_EMAIL")
+
     smtp_user = os.environ.get("SMTP_EMAIL")
     smtp_pass = os.environ.get("SMTP_PASSWORD")
-    if not smtp_user or not smtp_pass:
-        print(f"[EMAIL][SKIP] smtp_not_configured recipient={recipient_email}")
-        return False, "smtp_not_configured"
     smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
     smtp_port = int(os.environ.get("SMTP_PORT", "587"))
     smtp_timeout = float(os.environ.get("SMTP_TIMEOUT_SECONDS", "15"))
@@ -55,23 +55,25 @@ def _send_agent_email(
             filename=attachment_name,
         )
 
-    try:
-        print(
-            f"[EMAIL][SMTP] attempting recipient={recipient_email} host={smtp_host}:{smtp_port} timeout={smtp_timeout}s"
-        )
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=smtp_timeout) as server:
-            server.starttls()
-            server.login(smtp_user, smtp_pass)
-            server.send_message(msg)
-        print(f"[EMAIL][SMTP] sent recipient={recipient_email}")
-        return True, "sent"
-    except Exception as exc:
-        smtp_err = f"smtp_error:{exc}"
-        print(f"[EMAIL][SMTP][ERROR] recipient={recipient_email} err={smtp_err}")
+    smtp_err = "smtp_not_configured"
+    if smtp_user and smtp_pass:
+        try:
+            print(
+                f"[EMAIL][SMTP] attempting recipient={recipient_email} host={smtp_host}:{smtp_port} timeout={smtp_timeout}s"
+            )
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=smtp_timeout) as server:
+                server.starttls()
+                server.login(smtp_user, smtp_pass)
+                server.send_message(msg)
+            print(f"[EMAIL][SMTP] sent recipient={recipient_email}")
+            return True, "sent"
+        except Exception as exc:
+            smtp_err = f"smtp_error:{exc}"
+            print(f"[EMAIL][SMTP][ERROR] recipient={recipient_email} err={smtp_err}")
+    else:
+        print(f"[EMAIL][SKIP] smtp_not_configured recipient={recipient_email}")
 
     # Optional HTTPS fallback for Spaces where SMTP can be flaky/blocked.
-    resend_api_key = os.environ.get("RESEND_API_KEY")
-    resend_from_email = os.environ.get("RESEND_FROM_EMAIL")
     if not resend_api_key or not resend_from_email:
         return False, smtp_err
 
