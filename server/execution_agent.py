@@ -48,7 +48,7 @@ def _send_agent_email(
         }
         
         if attachment_name and attachment_bytes:
-            payload["attachments"] = [
+            payload["attachment"] = [
                 {
                     "name": attachment_name,
                     "content": base64.b64encode(attachment_bytes).decode("ascii")

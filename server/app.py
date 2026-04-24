@@ -199,7 +199,7 @@ def session_send_email(body: EmailRequest) -> Dict[str, Any]:
             "to": [{"email": body.email}],
             "subject": "Daily Post-Merge Operations Report",
             "htmlContent": "<html><body><p>Hello,<br><br>Please find the attached Daily MRG Report generated automatically by the Reporting Service.<br><br>Thanks.</p></body></html>",
-            "attachments": [
+            "attachment": [
                 {
                     "name": "daily_mrg_report.pdf",
                     "content": encoded_pdf
