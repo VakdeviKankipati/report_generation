@@ -208,8 +208,45 @@ def session_send_email(body: EmailRequest) -> Dict[str, Any]:
             server.login(smtp_user, smtp_pass)
             server.send_message(msg)
     except Exception as exc:
-        print(f"[EMAIL ERROR] {exc}")
-        raise HTTPException(status_code=500, detail=f"Failed to send email: {exc}")
+        print(f"[EMAIL SMTP ERROR] {exc}")
+        
+        # Fallback to Resend API since HF Spaces blocks SMTP ports 587/465
+        resend_api_key = os.environ.get("RESEND_API_KEY")
+        resend_from_email = os.environ.get("RESEND_FROM_EMAIL")
+        if resend_api_key and resend_from_email:
+            import base64
+            import requests
+            
+            print(f"[EMAIL RESEND] attempting fallback for {body.email}")
+            try:
+                r = requests.post(
+                    "https://api.resend.com/emails",
+                    headers={
+                        "Authorization": f"Bearer {resend_api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "from": resend_from_email,
+                        "to": [body.email],
+                        "subject": "Daily Post-Merge Operations Report",
+                        "text": "Hello,\n\nPlease find the attached Daily MRG Report generated automatically by the Reporting Service.\n\nThanks.",
+                        "attachments": [
+                            {
+                                "filename": "daily_mrg_report.pdf",
+                                "content": base64.b64encode(pdf_bytes).decode("ascii"),
+                            }
+                        ]
+                    },
+                    timeout=15,
+                )
+                if r.ok:
+                    return {"message": f"Successfully sent email to {body.email} via Resend fallback"}
+                else:
+                    raise HTTPException(status_code=500, detail=f"Failed to send email via Resend: {r.status_code} {r.text}")
+            except Exception as resend_exc:
+                raise HTTPException(status_code=500, detail=f"Failed to send email via both SMTP and Resend: {resend_exc}")
+        else:
+            raise HTTPException(status_code=500, detail=f"Failed to send email: {exc} (SMTP blocked and RESEND_API_KEY not configured)")
 
     return {"message": f"Successfully sent email to {body.email}"}
 
