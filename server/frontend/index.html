@@ -436,11 +436,15 @@
             `);
 
             try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 30000);
                 const response = await fetch('/session/run_manual_schedule', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ slot: slot })
+                    body: JSON.stringify({ slot: slot }),
+                    signal: controller.signal
                 });
+                clearTimeout(timeoutId);
                 
                 loaderMsg.remove();
                 
@@ -459,7 +463,10 @@
                 }
             } catch (error) {
                 loaderMsg.remove();
-                appendMessage('agent', `<p>❌ Request failed. Make sure the server is accessible.</p><p style="color: #ef4444; font-family: monospace; font-size: 0.9em;">${error.message}</p>`);
+                const msg = error.name === 'AbortError'
+                    ? 'Request timed out after 30s. Check SMTP settings/network and try again.'
+                    : error.message;
+                appendMessage('agent', `<p>❌ Request failed. Make sure the server is accessible.</p><p style="color: #ef4444; font-family: monospace; font-size: 0.9em;">${msg}</p>`);
             } finally {
                 generateBtn.disabled = false;
             }

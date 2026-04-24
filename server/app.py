@@ -181,6 +181,9 @@ def session_send_email(body: EmailRequest) -> Dict[str, Any]:
 
     smtp_user = os.environ.get("SMTP_EMAIL")
     smtp_pass = os.environ.get("SMTP_PASSWORD")
+    smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+    smtp_timeout = float(os.environ.get("SMTP_TIMEOUT_SECONDS", "15"))
 
     if not smtp_user or not smtp_pass:
         print(f"[MOCK EMAIL] Would send report to {body.email} (Configure SMTP_EMAIL and SMTP_PASSWORD to send real emails)")
@@ -200,7 +203,7 @@ def session_send_email(body: EmailRequest) -> Dict[str, Any]:
     )
 
     try:
-        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=smtp_timeout) as server:
             server.starttls()
             server.login(smtp_user, smtp_pass)
             server.send_message(msg)

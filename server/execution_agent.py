@@ -31,6 +31,9 @@ def _send_agent_email(
     smtp_pass = os.environ.get("SMTP_PASSWORD")
     if not smtp_user or not smtp_pass:
         return False, "smtp_not_configured"
+    smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+    smtp_timeout = float(os.environ.get("SMTP_TIMEOUT_SECONDS", "15"))
 
     msg = EmailMessage()
     msg["Subject"] = subject
@@ -48,7 +51,7 @@ def _send_agent_email(
         )
 
     try:
-        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=smtp_timeout) as server:
             server.starttls()
             server.login(smtp_user, smtp_pass)
             server.send_message(msg)
