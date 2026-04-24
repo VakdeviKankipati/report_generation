@@ -181,6 +181,12 @@ cd daily_report_env
 uv run pytest tests/ -q
 ```
 
+## Hackathon Submission & Demo
+
+- **Hackathon Theme:** Theme #3.1 Professional Tasks (Scaler AI Labs Sub-theme: Enterprise Workflows)
+- **Hugging Face Mini-Blog:** [Read our submission blog here](./hf_mini_blog.md) 📝 *(Update this with HF published link!)*
+- **Demo Space:** *(Link your Hugging Face Space here)* 🚀
+
 ## Hugging Face Space
 
 1. Create a **Docker** Space.
