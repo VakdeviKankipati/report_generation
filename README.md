@@ -10,11 +10,28 @@ tags:
   - openenv
 ---
 
-# Daily MRG Report (`daily_report_env`)
+# 🚀 Enterprise Autonomous Reporting Sub-System
 
-OpenEnv environment that simulates a **real-world operations task**: assembling the **daily 07:00 MRG (post-merge) PDF report** from static ETL-style extracts (metrics, KPI rows), then exporting an in-memory PDF for download in a downstream system.
+**Addressing Theme #3.1: Professional Tasks (Enterprise Workflows)**
 
-This is **not** a game: it models scheduled reporting after an overnight merge window, a common enterprise workflow.
+## 📖 The Problem (Motivation)
+Enterprise back-offices run on fragile cron jobs and scripts. Generating multi-account financial statements, running queries on failures, generating PDFs, and handling outbound API email logic often breaks when endpoints fail or data is missing. Traditional LLMs are terrible at long-running persistent workflow tasks where they have to schedule batches, track statuses over time, query data to debug failures, and push out actual emails via HTTP APIs without hallucinating payloads. 
+
+We need a way to train LLMs to become **Reliable Enterprise Agents** that don't just "chat", but actually manage persistent world models and orchestrated workflows.
+
+## 🌍 The Environment
+This OpenEnv environment simulates a **real-world operations center**.
+* **What the agent sees:** A live SQLite-backed queue of daily report tasks for high-value financial customers, along with incoming support queries.
+* **What the agent does:** It must orchestrate a **Two-Agent Workflow**. It uses a `Report Agent` to query databases, assemble 10AM/11AM enterprise PDF metrics, and negotiate outbound email delivery via the **Brevo HTTP API**. It uses a `Query Agent` to debug failed network attempts and retrieve loan details.
+* **What the agent is rewarded for:** The agent is rewarded for establishing high percentage task completions (successful email deliveries with correct PDF payloads) and heavily penalized for hallucinating API keys, getting stuck in loops on permanently unroutable loans, or failing to maintain a consistent state across the pipeline.
+
+## 🏆 Why It Matters
+This environment forces models to do *real hard work* instead of exploiting shortcuts. By training on this, an LLM learns causal reasoning over databases, robust error recovery (e.g. handling `Errno 101 Network unreachable`), and how to properly format multi-part REST API payloads for external tooling.
+
+---
+
+## ⚙️ Technical Documentation & OpenEnv Compliance
+
 
 ## OpenEnv compliance
 
@@ -193,10 +210,14 @@ Use `hackathon/train_colab.ipynb` for a minimal, re-runnable training flow conne
 
 Run the notebook with the environment server reachable at `BASE_URL` (local or Space URL), then attach the generated artifacts in your submission/demo.
 
+### Evidence of Training
+![Baseline Reward Curves](hackathon/reward_curve.png)
+![GRPO Tracking Loss](hackathon/grpo_loss_curve.png)
+
 ## Hackathon Submission & Demo
 
 - **Hackathon Theme:** Theme #3.1 Professional Tasks (Scaler AI Labs Sub-theme: Enterprise Workflows)
-- **Hugging Face Mini-Blog:** [Read our submission blog here](./hf_mini_blog.md) 📝 *(Update this with HF published link!)*
+- **Hugging Face Mini-Blog:** [Read our submission blog here](https://huggingface.co/spaces/VAKYA/enterprise-reporting-blog) 📝
 - **Demo Space:** [https://huggingface.co/spaces/VAKYA/Report_generation](https://huggingface.co/spaces/VAKYA/Report_generation) 🚀
 
 ## Hugging Face Space
