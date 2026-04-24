@@ -169,7 +169,7 @@ def session_run_static_demo() -> Dict[str, Any]:
 
 @app.post("/session/send_email", tags=["Session (stateful HTTP)"])
 def session_send_email(body: EmailRequest) -> Dict[str, Any]:
-    """Email the generated PDF report via Gmail SMTP (or mock it)."""
+    """Email the generated PDF report via Brevo HTTP API (or mock it)."""
     global _session_env
     with _session_lock:
         if _session_env is None or not _session_env.has_pdf:
@@ -179,36 +179,46 @@ def session_send_email(body: EmailRequest) -> Dict[str, Any]:
         pdf_bytes = _session_env.pdf_bytes
         assert pdf_bytes is not None
 
-    smtp_user = os.environ.get("SMTP_EMAIL")
-    smtp_pass = os.environ.get("SMTP_PASSWORD")
-    smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
-    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
-    smtp_timeout = float(os.environ.get("SMTP_TIMEOUT_SECONDS", "15"))
+    sender_email = os.environ.get("SENDER_EMAIL") or os.environ.get("SMTP_EMAIL")
+    api_key = os.environ.get("BREVO_API_KEY") or os.environ.get("SMTP_PASSWORD")
 
-    if not smtp_user or not smtp_pass:
-        print(f"[MOCK EMAIL] Would send report to {body.email} (Configure SMTP_EMAIL and SMTP_PASSWORD to send real emails)")
+    if not sender_email or not api_key:
+        print(f"[MOCK EMAIL] Would send report to {body.email} (Configure SENDER_EMAIL and BREVO_API_KEY to send real emails)")
         return {"message": f"Simulated email sent to {body.email} (Credentials missing)"}
 
-    msg = EmailMessage()
-    msg["Subject"] = "Daily Post-Merge Operations Report"
-    msg["From"] = smtp_user
-    msg["To"] = body.email
-    msg.set_content("Hello,\\n\\nPlease find the attached Daily MRG Report generated automatically by the Reporting Service.\\n\\nThanks.")
-
-    msg.add_attachment(
-        pdf_bytes,
-        maintype="application",
-        subtype="pdf",
-        filename="daily_mrg_report.pdf",
-    )
-
     try:
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=smtp_timeout) as server:
-            server.starttls()
-            server.login(smtp_user, smtp_pass)
-            server.send_message(msg)
+        import urllib.request
+        import json
+        import base64
+        
+        encoded_pdf = base64.b64encode(pdf_bytes).decode("utf-8")
+        
+        url = "https://api.brevo.com/v3/smtp/email"
+        payload = {
+            "sender": {"name": "Reporting Service", "email": sender_email},
+            "to": [{"email": body.email}],
+            "subject": "Daily Post-Merge Operations Report",
+            "htmlContent": "<html><body><p>Hello,<br><br>Please find the attached Daily MRG Report generated automatically by the Reporting Service.<br><br>Thanks.</p></body></html>",
+            "attachments": [
+                {
+                    "name": "daily_mrg_report.pdf",
+                    "content": encoded_pdf
+                }
+            ]
+        }
+        
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(url, data=data, method="POST")
+        req.add_header("accept", "application/json")
+        req.add_header("api-key", api_key)
+        req.add_header("content-type", "application/json")
+        
+        with urllib.request.urlopen(req) as response:
+            result = response.read()
     except Exception as exc:
-        print(f"[EMAIL ERROR] {exc}")
+        print(f"[EMAIL ERROR] HTTP API Failed: {exc}")
+        if hasattr(exc, 'read'):
+            print(f"[EMAIL ERROR] Response: {exc.read().decode('utf-8', errors='ignore')}")
         raise HTTPException(status_code=500, detail=f"Failed to send email: {exc}")
 
     return {"message": f"Successfully sent email to {body.email}"}
