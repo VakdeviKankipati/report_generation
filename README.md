@@ -185,7 +185,7 @@ uv run pytest tests/ -q
 
 - **Hackathon Theme:** Theme #3.1 Professional Tasks (Scaler AI Labs Sub-theme: Enterprise Workflows)
 - **Hugging Face Mini-Blog:** [Read our submission blog here](./hf_mini_blog.md) 📝 *(Update this with HF published link!)*
-- **Demo Space:** *(Link your Hugging Face Space here)* 🚀
+- **Demo Space:** [https://huggingface.co/spaces/VAKYA/Report_generation](https://huggingface.co/spaces/VAKYA/Report_generation) 🚀
 
 ## Hugging Face Space
 
