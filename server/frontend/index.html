@@ -275,6 +275,32 @@
             flex-wrap: wrap;
         }
 
+        .table-wrap {
+            margin-top: 1rem;
+            width: 100%;
+            overflow-x: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.82rem;
+        }
+
+        th, td {
+            border-bottom: 1px solid var(--border-color);
+            padding: 0.5rem 0.6rem;
+            text-align: left;
+            white-space: nowrap;
+        }
+
+        th {
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
         /* Typing indicator micro-animation */
         .typing {
             display: flex;
@@ -323,12 +349,12 @@
         <div class="chat-messages" id="chatMessages">
             <div class="message agent">
                 <p>Hello! I am your Automated Reporting Service.</p>
-                <p>Do you need the Daily MRG (post-merge) Report for today? Click the button below, and I'll aggregate the ETL data and compile the final PDF for you.</p>
+                <p>Click schedule to run the report agent. The live tracking table will show how each customer report is generated and emailed.</p>
             </div>
         </div>
 
         <div class="chat-input-area">
-            <button class="primary-btn" id="generateBtn" onclick="generateReport()">
+            <button class="primary-btn" id="generateBtn" onclick="runSchedule('both')">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                     <polyline points="14 2 14 8 20 8"></polyline>
@@ -336,8 +362,10 @@
                     <line x1="16" y1="17" x2="8" y2="17"></line>
                     <polyline points="10 9 9 9 8 9"></polyline>
                 </svg>
-                Generate Report
+                Schedule Both Reports Now
             </button>
+            <button class="secondary-btn" style="margin-left: 0.5rem;" onclick="runSchedule('10am')">Run 10am</button>
+            <button class="secondary-btn" style="margin-left: 0.5rem;" onclick="runSchedule('11am')">Run 11am</button>
         </div>
     </div>
 
@@ -354,125 +382,93 @@
             return msgDiv;
         }
 
-        async function generateReport() {
-            // Disable button
+        function renderTrackingTable(rows) {
+            if (!rows || rows.length === 0) {
+                return `<p>No live tracking rows yet.</p>`;
+            }
+            const header = `
+                <div class="table-wrap">
+                <table>
+                <thead>
+                  <tr>
+                    <th>Batch Id</th><th>Report Id</th><th>Customer</th><th>LAN</th><th>Type</th><th>Slot</th>
+                    <th>Status</th><th>Retries</th><th>Email</th><th>Email Status</th><th>Error</th>
+                  </tr>
+                </thead><tbody>
+            `;
+            const body = rows.map((r) => `
+                <tr>
+                  <td>${r.batch_id || ''}</td>
+                  <td>${r.report_id || ''}</td>
+                  <td>${r.customer_code || ''}</td>
+                  <td>${r.lan_code || ''}</td>
+                  <td>${r.report_type || ''}</td>
+                  <td>${r.scheduler_slot || ''}</td>
+                  <td>${r.status || ''}</td>
+                  <td>${r.retries_used || 0}/${r.max_retries || 5}</td>
+                  <td>${r.email_sent === 1 ? 'yes' : 'no'}</td>
+                  <td>${r.email_status || ''}</td>
+                  <td>${r.last_error_code || ''}</td>
+                </tr>
+            `).join('');
+            return `${header}${body}</tbody></table></div>`;
+        }
+
+        async function refreshTrackingTable() {
+            const response = await fetch('/session/live_tracks');
+            if (!response.ok) {
+                return '<p>Unable to load live tracking table.</p>';
+            }
+            const data = await response.json();
+            return renderTrackingTable(data.rows || []);
+        }
+
+        async function runSchedule(slot) {
             generateBtn.disabled = true;
             
-            // Append User Message
-            appendMessage('user', '<p>Please generate the Daily MRG Report.</p>');
+            appendMessage('user', `<p>Please run schedule: <strong>${slot}</strong></p>`);
             
-            // Append Agent Loader
             const loaderMsg = appendMessage('agent', `
-                <p>Aggregating data and generating PDF...</p>
+                <p>Running report agent and updating live tracking...</p>
                 <div class="typing">
                     <span></span><span></span><span></span>
                 </div>
             `);
 
             try {
-                // Call the static demo API endpoint
-                const response = await fetch('/session/run_static_demo', {
-                    method: 'POST'
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 30000);
+                const response = await fetch('/session/run_manual_schedule', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ slot: slot }),
+                    signal: controller.signal
                 });
+                clearTimeout(timeoutId);
                 
-                // Remove loader
                 loaderMsg.remove();
                 
                 if (response.ok) {
                     const data = await response.json();
-                    const score = data.result?.observation?.graded_score || 0;
-                    
-                    // The backend automatically provisions the PDF endpoint after run_static_demo
-                    const downloadUrl = '/session/report.pdf';
+                    const tableHtml = await refreshTrackingTable();
                     
                     appendMessage('agent', `
-                        <p>✅ <strong>Task Complete</strong></p>
-                        <p>I have successfully built the daily report. The final graded score for the generated content is <strong>${score.toFixed(2)} / 1.00</strong>.</p>
-                        <a href="${downloadUrl}" download="daily_mrg_report.pdf" class="download-btn">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                <polyline points="7 10 12 15 17 10"></polyline>
-                                <line x1="12" y1="15" x2="12" y2="3"></line>
-                            </svg>
-                            Download PDF Report
-                        </a>
+                        <p>✅ <strong>Schedule complete</strong></p>
+                        <p>Agent processed this run and updated live tracking table below.</p>
+                        ${tableHtml}
                     `);
-                    
-                    // Trigger email prompt shortly after completion
-                    setTimeout(() => askForEmail(), 1000);
                 } else {
                     const err = await response.json();
-                    appendMessage('agent', `<p>❌ Sorry, an error occurred during generation:</p><p style="color: #ef4444; font-family: monospace; font-size: 0.9em;">${err.detail || 'Unknown error'}</p>`);
+                    appendMessage('agent', `<p>❌ Schedule failed:</p><p style="color: #ef4444; font-family: monospace; font-size: 0.9em;">${err.detail || 'Unknown error'}</p>`);
                 }
             } catch (error) {
                 loaderMsg.remove();
-                appendMessage('agent', `<p>❌ Request failed. Make sure the server is accessible.</p><p style="color: #ef4444; font-family: monospace; font-size: 0.9em;">${error.message}</p>`);
+                const msg = error.name === 'AbortError'
+                    ? 'Request timed out after 30s. Check SMTP settings/network and try again.'
+                    : error.message;
+                appendMessage('agent', `<p>❌ Request failed. Make sure the server is accessible.</p><p style="color: #ef4444; font-family: monospace; font-size: 0.9em;">${msg}</p>`);
             } finally {
                 generateBtn.disabled = false;
-            }
-        }
-        
-        // Email interactive flow
-        function askForEmail() {
-            appendMessage('agent', `
-                <p>Would you like me to email this report to someone?</p>
-                <div class="action-container" id="emailPromptActions">
-                    <button class="secondary-btn" onclick="showEmailInput(this)">Yes, email it</button>
-                    <button class="secondary-btn" onclick="this.parentElement.innerHTML = '<em>No thanks.</em>'">No thanks</button>
-                </div>
-            `);
-        }
-
-        function showEmailInput(btn) {
-            const container = btn.parentElement;
-            container.innerHTML = `
-                <div class="email-form" style="width: 100%">
-                    <input type="email" id="targetEmail" class="email-input" placeholder="name@example.com" required>
-                    <button class="secondary-btn" onclick="submitEmail(this)">Send</button>
-                </div>
-            `;
-            setTimeout(() => document.getElementById('targetEmail').focus(), 100);
-        }
-
-        async function submitEmail(btn) {
-            const input = document.getElementById('targetEmail');
-            const email = input.value.trim();
-            if (!email || !email.includes('@')) {
-                alert("Please enter a valid email address.");
-                return;
-            }
-            
-            // Lock fields
-            input.disabled = true;
-            btn.disabled = true;
-
-            appendMessage('user', `<p>Yes, send it to: ${email}</p>`);
-
-            const loaderMsg = appendMessage('agent', `
-                <p>Sending email...</p>
-                <div class="typing">
-                    <span></span><span></span><span></span>
-                </div>
-            `);
-
-            try {
-                const response = await fetch('/session/send_email', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: email })
-                });
-
-                loaderMsg.remove();
-                const data = await response.json();
-                
-                if (response.ok) {
-                    appendMessage('agent', `<p>✅ <strong>Sent!</strong></p><p style="font-size: 0.9em; opacity: 0.9;">${data.message}</p>`);
-                } else {
-                    appendMessage('agent', `<p>❌ Failed to send email:</p><p style="color: #ef4444; font-size: 0.9em;">${data.detail || 'Unknown error'}</p>`);
-                }
-            } catch (error) {
-                loaderMsg.remove();
-                appendMessage('agent', `<p>❌ Request error:</p><p style="color: #ef4444; font-size: 0.9em;">${error.message}</p>`);
             }
         }
     </script>
