@@ -412,6 +412,91 @@ class ReportTrackingDB:
             ).fetchall()
             return [dict(r) for r in rows]
 
+    def find_customer_lan_by_lan_code(self, lan_code: str) -> Optional[Dict[str, object]]:
+        """Find mapped customer + LAN details by LAN code."""
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT
+                    c.id AS customer_id,
+                    c.customer_code,
+                    c.name AS customer_name,
+                    c.email AS customer_email,
+                    c.allow_report_delivery,
+                    l.id AS lan_id,
+                    l.lan_code,
+                    l.account_name,
+                    l.region,
+                    l.metric_revenue_musd,
+                    l.metric_incidents,
+                    l.metric_uptime_pct,
+                    l.should_fail_permanently
+                FROM customer_lan_map m
+                JOIN customers c ON c.id = m.customer_id
+                JOIN lans l ON l.id = m.lan_id
+                WHERE m.mapping_active = 1
+                  AND c.is_active = 1
+                  AND l.lan_code = ?
+                LIMIT 1
+                """,
+                (lan_code,),
+            ).fetchone()
+            return dict(row) if row else None
+
+    def list_tracks_for_batch(self, batch_id: str) -> List[Dict[str, object]]:
+        """Return all report tracking rows for a specific batch."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                    t.*,
+                    c.customer_code,
+                    c.name AS customer_name,
+                    c.email AS customer_email,
+                    l.lan_code
+                FROM live_report_tracking t
+                JOIN customers c ON c.id = t.customer_id
+                JOIN lans l ON l.id = t.lan_id
+                WHERE t.batch_id = ?
+                ORDER BY t.id ASC
+                """,
+                (batch_id,),
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    def summarize_tracks(self, batch_id: Optional[str] = None) -> Dict[str, int]:
+        """Summarize track statuses optionally scoped to one batch."""
+        with self._connect() as conn:
+            if batch_id is None:
+                rows = conn.execute(
+                    """
+                    SELECT status, COUNT(*) AS c
+                    FROM live_report_tracking
+                    GROUP BY status
+                    """
+                ).fetchall()
+                total_row = conn.execute(
+                    "SELECT COUNT(*) AS c FROM live_report_tracking"
+                ).fetchone()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT status, COUNT(*) AS c
+                    FROM live_report_tracking
+                    WHERE batch_id = ?
+                    GROUP BY status
+                    """,
+                    (batch_id,),
+                ).fetchall()
+                total_row = conn.execute(
+                    "SELECT COUNT(*) AS c FROM live_report_tracking WHERE batch_id = ?",
+                    (batch_id,),
+                ).fetchone()
+            out: Dict[str, int] = {"total": int(total_row["c"])}
+            for row in rows:
+                out[str(row["status"])] = int(row["c"])
+            return out
+
     def get_live_track(self, report_id: str) -> Optional[Dict[str, object]]:
         with self._connect() as conn:
             row = conn.execute(

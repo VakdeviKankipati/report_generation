@@ -4,12 +4,9 @@ from __future__ import annotations
 
 import base64
 import os
-import smtplib
+import requests
 from email.message import EmailMessage
 from typing import Dict
-
-import requests
-
 from .database import ReportTrackingDB
 from .report_builder import build_10am_account_statement, build_11am_finance_summary
 
