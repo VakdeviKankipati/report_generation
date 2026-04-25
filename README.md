@@ -207,12 +207,17 @@ Use `hackathon/train_colab.ipynb` for a minimal, re-runnable training flow conne
   - `hackathon/baseline_policy_rewards.csv`
   - `hackathon/grpo_train_logs.csv`
   - `hackathon/grpo_loss_curve.png`
+  - `hackathon/grpo_pre_post_reward_curve.png`
+  - `hackathon/grpo_pre_post_eval.csv`
 
 Run the notebook with the environment server reachable at `BASE_URL` (local or Space URL), then attach the generated artifacts in your submission/demo.
 
 ### Evidence of Training
 ![Baseline Reward Curves](hackathon/reward_curve.png)
 ![GRPO Tracking Loss](hackathon/grpo_loss_curve.png)
+![GRPO Pre-train vs Post-train Reward](hackathon/grpo_pre_post_reward_curve.png)
+
+**Pre-train vs post-train evaluation:** `hackathon/grpo_pre_post_eval.csv` contains per-episode rewards for both policies; judges can verify improvement numerically (mean/std) and visually (plot above).
 
 ## Hackathon Submission & Demo
 
