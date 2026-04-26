@@ -140,23 +140,17 @@ class ReportTrackingDB:
 
     def seed_static_data(self) -> None:
         """Seed 5 customers + 5 LANs + 1:1 mapping with requested emails.
-
         Do not overwrite manual DB edits once records already exist.
         """
         now = utc_now_iso()
         seed_customers = [
             ("CUST-001", "Customer 1", "vakdevikankipati@gmail.com", "Asia/Kolkata", 1),
             ("CUST-002", "Customer 2", "vakya85@gmail.com", "Asia/Kolkata", 1),
-            ("CUST-003", "Customer 3", "vakya2605@gmail.com", "Europe/Berlin", 1),
-            ("CUST-004", "Customer 4", "jatangithanuja@gmail.com", "Europe/Berlin", 1),
-            # Wrong customer email: keep mapped for test scenario, but block report delivery.
             ("CUST-005", "Customer 5", "a@x.com", "Asia/Kolkata", 0),
         ]
         seed_lans = [
             ("LAN-001", "Home Loan - Bangalore", "APAC", "Asia/Kolkata", 11.0, 1, 99.53, 0),
             ("LAN-002", "Car Loan - Hyderabad", "APAC", "Asia/Kolkata", 12.0, 0, 99.56, 0),
-            ("LAN-003", "Personal Loan - Chennai", "APAC", "Europe/Berlin", 13.0, 1, 99.59, 0),
-            ("LAN-004", "Gold Loan - Berlin", "EU", "Europe/Berlin", 14.0, 0, 99.62, 0),
             ("LAN-005", "Education Loan - Munich", "EU", "Asia/Kolkata", 15.0, 3, 99.65, 1),
         ]
         with self._connect() as conn:
@@ -265,7 +259,6 @@ class ReportTrackingDB:
 
     def resolve_recipient_email(self, report_id: str, is_failure: bool) -> str:
         """Route failure emails to fixed address; otherwise route to mapped customer email.
-
         If customer email is blocked for delivery, route to fixed failure address.
         """
         if is_failure:
